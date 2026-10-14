@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- Makes the page scale correctly on phones -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+
+    <!-- App icon shown in browser tab -->
+    <link rel="icon" type="image/jpeg" href="/logo.jpg" />
+
+    <!-- SEO: descriptive page title -->
+    <title>CamieWell — Your Daily Wellness Companion</title>
+
+    <!-- SEO: short description shown in Google search results -->
+    <meta name="description" content="CamieWell is a cute, offline-first wellness app for tracking calories, water, sleep, mood, and workouts." />
+
+    <!-- Google Fonts: 'Nunito' for body text, 'Pacifico' for the brand name -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800&family=Pacifico&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+
+    <!--
+      #app is the mount point.
+      Vite's main.js will inject Bootstrap + our custom CSS,
+      then render the page content here.
+    -->
+    <div id="app"></div>
+
+    <!--
+      type="module" tells the browser this is an ES Module.
+      Vite intercepts this in dev mode and handles all imports.
+    -->
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
