@@ -28,11 +28,11 @@ import 'bootstrap-icons/font/bootstrap-icons.css';
 import './style.css';
 
 // --- Page renderers: each builds the HTML for one screen ---
-import { renderHome }      from './pages/home.js';
-import { renderFoodDiary } from './pages/food.js';
-import { renderWorkouts }  from './pages/workouts.js';
-import { renderProgress }  from './pages/progress.js';
-import { renderSettings }  from './pages/settings.js';
+import { renderHome }                  from './pages/home.js';
+import { renderFoodDiary, initFoodDiary } from './pages/food.js';
+import { renderWorkouts }              from './pages/workouts.js';
+import { renderProgress }              from './pages/progress.js';
+import { renderSettings }              from './pages/settings.js';
 
 // --- Interactive behaviours wired after render ---
 import { initWaterTracker }   from './components/water.js';
@@ -146,6 +146,19 @@ function renderApp() {
   initMoodSelector();
   initEnergySlider();
   initRings();
+  initFoodDiary();
+
+  // Wire Home dashboard "Log food →" button to switch to Food tab
+  const homeLogBtn = document.getElementById('home-log-food-btn');
+  if (homeLogBtn) {
+    homeLogBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const navFoodBtn = document.getElementById('nav-food');
+      if (navFoodBtn) {
+        navFoodBtn.click();
+      }
+    });
+  }
 }
 
 /**

@@ -32,7 +32,7 @@ export function renderHome() {
           <i class="bi bi-fire"></i>
           Daily Calories
         </div>
-        <a href="#" class="card-link" onclick="return false">Log food →</a>
+        <a href="#" class="card-link" id="home-log-food-btn" onclick="return false">Log food →</a>
       </div>
 
       <!-- Big calorie number + ring chart side by side -->
