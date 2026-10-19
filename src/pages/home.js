@@ -1,329 +1,250 @@
 /**
- * home.js — Home Dashboard Page
- * ==============================
- * Exports renderHome(), which returns an HTML string for the
- * main dashboard screen.
+ * home.js — Home Dashboard Page (Calm, Minimalist Baby Pink)
+ * ==========================================================
+ * Clean, tranquil dashboard tailored for mobile Android screens:
+ *  1. Calm greeting banner
+ *  2. Today's Core Highlights (Calories, Water, Movement)
+ *  3. Weekly Calendar Streak strip (replaces cluttered demo/pet area)
+ *  4. Water quick-logger
+ *  5. Quick Navigation actions
  *
- * Sections on this screen:
- *  1. Greeting banner (user name + motivational text)
- *  2. Calorie summary card (hero / gradient card)
- *  3. Macro breakdown (protein, carbs, fat progress bars)
- *  4. Water intake tracker
- *  5. Sleep summary
- *  6. Mood & Energy check-in
- *  7. Activity summary
- *
- * All numbers here are DEMO data — labelled clearly.
- * No real calculations or persistence happen in this file.
+ * Designed to reduce visual noise and prevent sensory overstimulation.
  */
+
+import { getFoodLog } from '../services/foodStorage.js';
+import { getWaterLog, getWaterSettings } from '../services/waterStorage.js';
+import { getWorkoutStreakInfo, getWorkoutHistory } from '../services/workoutStorage.js';
+import { getSettings } from '../services/settingsStorage.js';
+import { getLocalDateString, getDayActivity } from '../services/insightsService.js';
 
 export function renderHome() {
   return `
-    <!-- ── Greeting ───────────────────────────────────────── -->
-    <div class="greeting-banner mt-md">
-      <p class="greeting-sub">Good afternoon! ☀️</p>
-      <h1 class="greeting-name">Hey, Camie! 🌸</h1>
-    </div>
-
-    <!-- ── 1. CALORIE SUMMARY (Hero Card) ────────────────── -->
-    <div class="cw-card cw-card-hero card-bounce delay-1" style="--card-accent: rgba(255,255,255,0.15)">
-      <div class="card-header-row">
-        <div class="card-title">
-          <i class="bi bi-fire"></i>
-          Daily Calories
-        </div>
-        <a href="#" class="card-link" id="home-log-food-btn" onclick="return false">Log food →</a>
+    <div class="home-page-container">
+      <!-- ── 1. GREETING ───────────────────────────────────────── -->
+      <div class="greeting-banner mt-2 mb-3">
+        <p class="greeting-sub text-muted mb-0" id="home-greeting-sub">Welcome back 🌸</p>
+        <h1 class="greeting-name mb-0" id="home-greeting-name">Hey, Camie!</h1>
       </div>
 
-      <!-- Big calorie number + ring chart side by side -->
-      <div style="display:flex; align-items:center; gap:1.5rem;">
+      <!-- ── 2. TODAY'S HIGHLIGHTS (Clean & Calm) ──────────────── -->
+      <div class="cw-card mb-3" id="home-today-card">
+        <div class="card-header-row mb-2">
+          <span class="card-title">✨ Today at a Glance</span>
+          <span class="text-muted small" id="home-today-date"></span>
+        </div>
 
-        <!-- Left: numbers -->
-        <div style="flex:1;">
-          <div style="margin-bottom:0.75rem;">
-            <span class="stat-value" id="cals-consumed">1,420</span>
-            <span class="stat-unit"> kcal</span>
-            <div class="stat-label">consumed today</div>
-          </div>
-          <div class="divider" style="margin:0.5rem 0; background:rgba(255,255,255,0.25);"></div>
-          <div style="display:flex; gap:1.5rem;">
-            <div>
-              <div style="font-size:1rem; font-weight:800; color:#fff;">580</div>
-              <div class="stat-label">remaining</div>
+        <div class="home-today-summary-grid">
+          <!-- Calories -->
+          <div class="home-summary-item">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+              <span class="summary-label">🥗 Calories</span>
+              <span class="summary-val" id="home-cal-val">0 / 2,000 kcal</span>
             </div>
-            <div>
-              <div style="font-size:1rem; font-weight:800; color:#fff;">2,000</div>
-              <div class="stat-label">daily goal</div>
+            <div class="cw-progress" style="height: 6px;">
+              <div class="cw-progress-fill" id="home-cal-bar" style="width: 0%; background: var(--pink-400);"></div>
             </div>
           </div>
-        </div>
 
-        <!-- Right: donut ring chart (animated by rings.js) -->
-        <div class="ring-wrap">
-          <svg id="ring-calories" class="ring-svg" width="90" height="90" viewBox="0 0 90 90" aria-label="71% of daily calories consumed">
-            <!-- The grey track circle -->
-            <circle class="ring-track" cx="45" cy="45" r="38" />
-            <!-- The pink filled arc — stroke-dasharray set by JS -->
-            <circle class="ring-fill" id="ring-calories-fill" cx="45" cy="45" r="38"
-              style="stroke: rgba(255,255,255,0.90);" />
-            <!-- Center text (rotated back since SVG is rotated -90deg) -->
-            <g transform="rotate(90, 45, 45)">
-              <text class="ring-center-text" x="45" y="41" fill="white">71%</text>
-              <text class="ring-center-label" x="45" y="53" fill="rgba(255,255,255,0.80)">of goal</text>
-            </g>
-          </svg>
-          <div class="ring-label" style="color:rgba(255,255,255,0.85);">calories</div>
-        </div>
-
-      </div>
-
-      <!-- DEMO label -->
-      <div style="margin-top:0.75rem;">
-        <span class="demo-badge" style="background:rgba(255,255,255,0.15); color:rgba(255,255,255,0.85); border-color:rgba(255,255,255,0.30);">
-          ✦ Demo Data
-        </span>
-      </div>
-    </div>
-
-    <!-- ── 2. MACRO BREAKDOWN ──────────────────────────────── -->
-    <div class="cw-card card-bounce delay-2" style="--card-accent: #f3e5f5;">
-      <div class="card-header-row">
-        <div class="card-title">
-          <i class="bi bi-pie-chart-fill" style="color:var(--color-protein);"></i>
-          Macros Today
-        </div>
-        <span class="demo-badge">Demo</span>
-      </div>
-
-      <!-- Protein -->
-      <div class="cw-progress-wrap">
-        <div class="cw-progress-label-row">
-          <span class="cw-progress-label">🥩 Protein</span>
-          <span class="cw-progress-pct">68g / 100g</span>
-        </div>
-        <div class="cw-progress">
-          <div class="cw-progress-fill fill-protein" style="width:68%;" role="progressbar" aria-valuenow="68" aria-valuemin="0" aria-valuemax="100"></div>
-        </div>
-      </div>
-
-      <!-- Carbohydrates -->
-      <div class="cw-progress-wrap mt-sm">
-        <div class="cw-progress-label-row">
-          <span class="cw-progress-label">🌾 Carbs</span>
-          <span class="cw-progress-pct">185g / 250g</span>
-        </div>
-        <div class="cw-progress">
-          <div class="cw-progress-fill fill-calories" style="width:74%;" role="progressbar" aria-valuenow="74" aria-valuemin="0" aria-valuemax="100"></div>
-        </div>
-      </div>
-
-      <!-- Fat -->
-      <div class="cw-progress-wrap mt-sm">
-        <div class="cw-progress-label-row">
-          <span class="cw-progress-label">🥑 Fat</span>
-          <span class="cw-progress-pct">42g / 65g</span>
-        </div>
-        <div class="cw-progress">
-          <div class="cw-progress-fill fill-sleep" style="width:65%;" role="progressbar" aria-valuenow="65" aria-valuemin="0" aria-valuemax="100"></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ── 3. WATER INTAKE ─────────────────────────────────── -->
-    <div class="cw-card card-bounce delay-3" style="--card-accent: #e1f5fe;">
-      <div class="card-header-row">
-        <div class="card-title">
-          <i class="bi bi-droplet-half" style="color:var(--color-water);"></i>
-          Water Intake
-        </div>
-        <span class="demo-badge">Demo</span>
-      </div>
-
-      <!-- 8 glass buttons — clicking them fills/unfills the glass.
-           The filled count is tracked by water.js -->
-      <div class="water-glasses" id="water-glasses-container" role="group" aria-label="Water glasses tracker">
-        <!-- Glasses are built by water.js to keep HTML clean -->
-      </div>
-
-      <!-- Summary line: updates as user clicks glasses -->
-      <div class="water-summary-text">
-        <span class="water-ml-text" id="water-ml-display">1,250</span>
-        ml &nbsp;·&nbsp; <span id="water-glasses-count">5</span> of 8 glasses
-      </div>
-
-      <!-- Progress bar -->
-      <div class="cw-progress-wrap mt-sm">
-        <div class="cw-progress">
-          <div class="cw-progress-fill fill-water" id="water-progress-bar" style="width:62%;" role="progressbar" aria-label="Water intake progress" aria-valuenow="62" aria-valuemin="0" aria-valuemax="100"></div>
-        </div>
-      </div>
-
-      <p class="text-muted mt-sm" style="font-size:0.72rem; text-align:center;">
-        Tap a glass to log water &nbsp;·&nbsp; Goal: 2,000 ml / day
-      </p>
-    </div>
-
-    <!-- ── 4. SLEEP SUMMARY ───────────────────────────────── -->
-    <div class="cw-card card-bounce delay-4" style="--card-accent: #e8eaf6;">
-      <div class="card-header-row">
-        <div class="card-title">
-          <i class="bi bi-moon-stars-fill" style="color:var(--color-sleep);"></i>
-          Sleep Last Night
-        </div>
-        <span class="demo-badge">Demo</span>
-      </div>
-
-      <div class="stats-grid-2">
-        <div class="mini-stat-card">
-          <span class="mini-stat-icon">😴</span>
-          <div class="mini-stat-value">7h 20m</div>
-          <div class="mini-stat-label">Duration</div>
-        </div>
-        <div class="mini-stat-card">
-          <span class="mini-stat-icon">⏰</span>
-          <div class="mini-stat-value">11:30 PM</div>
-          <div class="mini-stat-label">Bedtime</div>
-        </div>
-        <div class="mini-stat-card">
-          <span class="mini-stat-icon">🌅</span>
-          <div class="mini-stat-value">6:50 AM</div>
-          <div class="mini-stat-label">Wake-up</div>
-        </div>
-        <div class="mini-stat-card">
-          <span class="mini-stat-icon">✨</span>
-          <div class="mini-stat-value">Good</div>
-          <div class="mini-stat-label">Quality</div>
-        </div>
-      </div>
-
-      <!-- Sleep progress toward 8-hour goal -->
-      <div class="cw-progress-wrap mt-md">
-        <div class="cw-progress-label-row">
-          <span class="cw-progress-label">Sleep goal</span>
-          <span class="cw-progress-pct">7h 20m / 8h</span>
-        </div>
-        <div class="cw-progress">
-          <div class="cw-progress-fill fill-sleep" style="width:92%;" role="progressbar" aria-valuenow="92" aria-valuemin="0" aria-valuemax="100"></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ── 5. MOOD & ENERGY ───────────────────────────────── -->
-    <div class="cw-card card-bounce delay-5" style="--card-accent: #fce4ec;">
-      <div class="card-header-row">
-        <div class="card-title">
-          <i class="bi bi-emoji-smile-fill" style="color:var(--color-mood);"></i>
-          Mood & Energy
-        </div>
-        <span class="demo-badge">Demo</span>
-      </div>
-
-      <p class="text-muted mb-sm" style="font-size:0.78rem;">How are you feeling today?</p>
-
-      <!-- Mood emoji selector — active state managed by mood.js -->
-      <div class="mood-selector" id="mood-selector" role="group" aria-label="Mood selector">
-        <button class="mood-option" data-mood="awful"   aria-label="Awful">
-          <span class="emoji">😣</span>
-          <span class="label">Awful</span>
-        </button>
-        <button class="mood-option" data-mood="bad"     aria-label="Bad">
-          <span class="emoji">😟</span>
-          <span class="label">Bad</span>
-        </button>
-        <button class="mood-option selected" data-mood="okay" aria-label="Okay" aria-pressed="true">
-          <span class="emoji">😊</span>
-          <span class="label">Okay</span>
-        </button>
-        <button class="mood-option" data-mood="good"    aria-label="Good">
-          <span class="emoji">😄</span>
-          <span class="label">Good</span>
-        </button>
-        <button class="mood-option" data-mood="great"   aria-label="Great">
-          <span class="emoji">🥰</span>
-          <span class="label">Great</span>
-        </button>
-      </div>
-
-      <!-- Energy level slider -->
-      <div class="energy-bar-wrap">
-        <div class="energy-label-row">
-          <span>⚡ Energy Level</span>
-          <span id="energy-value-label">7 / 10</span>
-        </div>
-        <input
-          type="range"
-          class="energy-slider"
-          id="energy-slider"
-          min="1"
-          max="10"
-          value="7"
-          style="--slider-pct: 70%;"
-          aria-label="Energy level"
-          aria-valuenow="7"
-          aria-valuemin="1"
-          aria-valuemax="10"
-        />
-        <div class="energy-label-row mt-sm">
-          <span>😴 Low</span>
-          <span>⚡ High</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- ── 6. ACTIVITY SUMMARY ────────────────────────────── -->
-    <div class="cw-card card-bounce delay-6" style="--card-accent: #e8f5e9;">
-      <div class="card-header-row">
-        <div class="card-title">
-          <i class="bi bi-activity" style="color:var(--color-activity);"></i>
-          Today's Activity
-        </div>
-        <span class="demo-badge">Demo</span>
-      </div>
-
-      <!-- Top summary row -->
-      <div class="stats-grid-2 mb-md">
-        <div class="mini-stat-card">
-          <span class="mini-stat-icon">🔥</span>
-          <div class="mini-stat-value">320</div>
-          <div class="mini-stat-label">kcal burned</div>
-        </div>
-        <div class="mini-stat-card">
-          <span class="mini-stat-icon">👟</span>
-          <div class="mini-stat-value">6,842</div>
-          <div class="mini-stat-label">steps</div>
-        </div>
-      </div>
-
-      <!-- Individual activity list -->
-      <div class="activity-list">
-        <div class="activity-item">
-          <div class="activity-dot" style="background:#a5d6a7;"></div>
-          <div class="activity-info">
-            <div class="activity-name">Morning Walk 🌿</div>
-            <div class="activity-meta">30 min · 7:15 AM</div>
+          <!-- Water -->
+          <div class="home-summary-item mt-2">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+              <span class="summary-label">💧 Water</span>
+              <span class="summary-val" id="home-water-val">0 / 2,000 mL</span>
+            </div>
+            <div class="cw-progress" style="height: 6px;">
+              <div class="cw-progress-fill" id="home-water-bar" style="width: 0%; background: var(--color-water);"></div>
+            </div>
           </div>
-          <div class="activity-kcal">−150 kcal</div>
-        </div>
-        <div class="activity-item">
-          <div class="activity-dot" style="background:#f48fb1;"></div>
-          <div class="activity-info">
-            <div class="activity-name">Yoga Session 🧘‍♀️</div>
-            <div class="activity-meta">45 min · 12:00 PM</div>
+
+          <!-- Workout & Habits -->
+          <div class="d-flex justify-content-between align-items-center mt-3 pt-2 border-top">
+            <div class="d-flex align-items-center gap-2">
+              <span class="home-status-icon" id="home-workout-icon">🏃‍♀️</span>
+              <span class="small text-muted" id="home-workout-status">No workout yet</span>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+              <span class="home-status-icon" id="home-habits-icon">🌸</span>
+              <span class="small text-muted" id="home-habits-status">0 habits done</span>
+            </div>
           </div>
-          <div class="activity-kcal">−170 kcal</div>
         </div>
       </div>
 
-      <!-- Steps progress bar -->
-      <div class="cw-progress-wrap mt-md">
-        <div class="cw-progress-label-row">
-          <span class="cw-progress-label">Steps goal</span>
-          <span class="cw-progress-pct">6,842 / 10,000</span>
+      <!-- ── 3. WEEKLY CALENDAR STREAK (Replaces Pet Area) ─────── -->
+      <div class="cw-card mb-3" id="home-streak-card">
+        <div class="card-header-row mb-2 d-flex justify-content-between align-items-center">
+          <div>
+            <span class="card-title">🗓️ This Week's Streak</span>
+            <span class="badge-cw-subtle ms-2" id="home-streak-badge">🔥 0 Days</span>
+          </div>
+          <button class="btn-cw-link small" id="home-view-calendar-btn" data-navigate="insights" title="View full calendar">
+            Calendar & Heatmap →
+          </button>
         </div>
-        <div class="cw-progress">
-          <div class="cw-progress-fill fill-activity" style="width:68%;" role="progressbar" aria-valuenow="68" aria-valuemin="0" aria-valuemax="100"></div>
+
+        <!-- 7-Day Clean Streak Strip -->
+        <div class="home-streak-strip d-flex justify-content-between gap-1 mt-2 pt-1" id="home-week-strip">
+          <!-- Populated dynamically by initHome() -->
+        </div>
+
+        <p class="text-muted xsmall text-center mt-2 mb-0" style="font-size: 0.72rem;">
+          Rest days are part of progress. Show up gently for yourself! 🌸
+        </p>
+      </div>
+
+      <!-- ── 4. WATER INTAKE TRACKER MOUNT ───────────────────── -->
+      <div id="water-tracker-mount"></div>
+
+      <!-- ── 5. QUICK ACTIONS BAR ────────────────────────────── -->
+      <div class="cw-card cw-card-sm mb-3">
+        <div class="card-header-row mb-2">
+          <span class="card-title">⚡ Quick Actions</span>
+        </div>
+        <div class="quick-actions-grid d-flex gap-2">
+          <button class="quick-action-btn flex-fill" id="quick-act-food" data-page="food">
+            <span class="action-icon">🥗</span>
+            <span class="action-label">Log Food</span>
+          </button>
+          <button class="quick-action-btn flex-fill" id="quick-act-workout" data-page="workouts">
+            <span class="action-icon">🏃‍♀️</span>
+            <span class="action-label">Workout</span>
+          </button>
+          <button class="quick-action-btn flex-fill" id="quick-act-habits" data-page="habits">
+            <span class="action-icon">🌸</span>
+            <span class="action-label">Habits</span>
+          </button>
+          <button class="quick-action-btn flex-fill" id="quick-act-insights" data-navigate="insights">
+            <span class="action-icon">🗓️</span>
+            <span class="action-label">Insights</span>
+          </button>
         </div>
       </div>
     </div>
   `;
+}
+
+/**
+ * Initializes and populates the clean Home screen with real data.
+ */
+export function initHome() {
+  const today = new Date();
+  const todayStr = getLocalDateString(today);
+  const settings = getSettings();
+  const waterSettings = getWaterSettings();
+
+  // 1. Update greeting name
+  const nameEl = document.getElementById('home-greeting-name');
+  if (nameEl) {
+    nameEl.textContent = `Hey, ${settings.profileName || 'Camie'}! 🌸`;
+  }
+
+  // Greeting time
+  const subEl = document.getElementById('home-greeting-sub');
+  if (subEl) {
+    const hr = today.getHours();
+    if (hr < 12) subEl.textContent = 'Good morning ☀️';
+    else if (hr < 18) subEl.textContent = 'Good afternoon 🌸';
+    else subEl.textContent = 'Good evening 🌙';
+  }
+
+  // Date label
+  const dateLabel = document.getElementById('home-today-date');
+  if (dateLabel) {
+    dateLabel.textContent = today.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  }
+
+  // 2. Real Today Data
+  const dayData = getDayActivity(todayStr);
+
+  // Calories
+  const calGoal = Number(settings.calorieGoal) || 2000;
+  const calVal = dayData.categories.food.calories || 0;
+  const calPct = Math.min(100, Math.round((calVal / calGoal) * 100));
+  const calValEl = document.getElementById('home-cal-val');
+  const calBarEl = document.getElementById('home-cal-bar');
+  if (calValEl) calValEl.textContent = `${calVal} / ${calGoal} kcal`;
+  if (calBarEl) calBarEl.style.width = `${calPct}%`;
+
+  // Water
+  const waterGoal = Number(waterSettings.dailyGoal) || Number(settings.waterGoal) || 2000;
+  const waterVal = dayData.categories.water.totalMl || 0;
+  const waterPct = Math.min(100, Math.round((waterVal / waterGoal) * 100));
+  const waterValEl = document.getElementById('home-water-val');
+  const waterBarEl = document.getElementById('home-water-bar');
+  if (waterValEl) waterValEl.textContent = `${waterVal} / ${waterGoal} mL`;
+  if (waterBarEl) waterBarEl.style.width = `${waterPct}%`;
+
+  // Workout status
+  const wStatusEl = document.getElementById('home-workout-status');
+  const wIconEl = document.getElementById('home-workout-icon');
+  if (dayData.categories.workouts.hasRecord) {
+    if (wStatusEl) wStatusEl.textContent = `${dayData.categories.workouts.sessionCount} workout done! 🎉`;
+    if (wIconEl) wIconEl.textContent = '✅';
+  } else {
+    if (wStatusEl) wStatusEl.textContent = 'Rest day / Not yet';
+    if (wIconEl) wIconEl.textContent = '🏃‍♀️';
+  }
+
+  // Habit status
+  const hStatusEl = document.getElementById('home-habits-status');
+  if (hStatusEl) {
+    const { completedCount, scheduledCount } = dayData.categories.habits;
+    if (scheduledCount > 0) {
+      hStatusEl.textContent = `${completedCount} of ${scheduledCount} habits`;
+    } else {
+      hStatusEl.textContent = `${completedCount} habits done`;
+    }
+  }
+
+  // 3. Weekly Streak Strip
+  const streakInfo = getWorkoutStreakInfo(today);
+  const streakBadge = document.getElementById('home-streak-badge');
+  if (streakBadge) {
+    streakBadge.textContent = streakInfo.currentStreak > 0 ? `🔥 ${streakInfo.currentStreak} Day Streak` : '🌸 Fresh Start';
+  }
+
+  const stripEl = document.getElementById('home-week-strip');
+  if (stripEl) {
+    // Current Week (Monday to Sunday)
+    const dayOfWeek = today.getDay(); // 0=Sun, 1=Mon...
+    const mondayOffset = (dayOfWeek + 6) % 7;
+    const monday = new Date(today);
+    monday.setDate(today.getDate() - mondayOffset);
+
+    const weekDays = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + i);
+      const dStr = getLocalDateString(d);
+      const act = getDayActivity(dStr);
+      weekDays.push({
+        dayName: d.toLocaleDateString('en-US', { weekday: 'narrow' }),
+        dayNum: d.getDate(),
+        dateStr: dStr,
+        isToday: dStr === todayStr,
+        hasActivity: act.hasAnyActivity,
+        intensity: act.intensity.all,
+        categories: act.categories,
+      });
+    }
+
+    stripEl.innerHTML = weekDays.map((wd) => `
+      <div class="home-week-day-col text-center flex-fill ${wd.isToday ? 'is-today' : ''}" style="cursor: pointer;" data-date="${wd.dateStr}" data-navigate="insights">
+        <span class="xsmall text-muted d-block mb-1 font-weight-bold" style="font-size: 0.68rem;">${wd.dayName}</span>
+        <div class="home-streak-dot heat-lvl-${wd.intensity} ${wd.isToday ? 'today-border' : ''}" title="${wd.dateStr}: ${wd.intensity > 0 ? `${wd.intensity} active categories` : 'Rest day'}">
+          ${wd.intensity > 0 ? '✓' : '·'}
+        </div>
+        <span class="xsmall text-muted d-block mt-1" style="font-size: 0.62rem;">${wd.dayNum}</span>
+      </div>
+    `).join('');
+  }
+
+  // Quick action navigation buttons
+  document.querySelectorAll('.quick-action-btn[data-page]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const page = btn.getAttribute('data-page');
+      const navBtn = document.getElementById(`nav-${page}`);
+      if (navBtn) navBtn.click();
+    });
+  });
 }

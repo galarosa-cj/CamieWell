@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="cw-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffe3ec"/>
+      <stop offset="50%" stop-color="#ffb3c6"/>
+      <stop offset="100%" stop-color="#ff6b8b"/>
+    </linearGradient>
+    <filter id="soft-shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#c9184a" flood-opacity="0.25"/>
+    </filter>
+  </defs>
+  <!-- Rounded Squircle Background -->
+  <rect width="512" height="512" rx="128" fill="url(#cw-bg)"/>
+  
+  <!-- Central Emblem with Glow -->
+  <g filter="url(#soft-shadow)">
+    <!-- White backing circle -->
+    <circle cx="256" cy="256" r="170" fill="#ffffff" fill-opacity="0.92"/>
+    
+    <!-- Cherry Blossom Petals -->
+    <g transform="translate(256, 240)">
+      <!-- 5 Petals -->
+      <path d="M 0,-10 C -25,-60 -55,-95 0,-125 C 55,-95 25,-60 0,-10 Z" fill="#ff758f"/>
+      <path d="M 0,-10 C -25,-60 -55,-95 0,-125 C 55,-95 25,-60 0,-10 Z" fill="#ff758f" transform="rotate(72)"/>
+      <path d="M 0,-10 C -25,-60 -55,-95 0,-125 C 55,-95 25,-60 0,-10 Z" fill="#ff758f" transform="rotate(144)"/>
+      <path d="M 0,-10 C -25,-60 -55,-95 0,-125 C 55,-95 25,-60 0,-10 Z" fill="#ff758f" transform="rotate(216)"/>
+      <path d="M 0,-10 C -25,-60 -55,-95 0,-125 C 55,-95 25,-60 0,-10 Z" fill="#ff758f" transform="rotate(288)"/>
+      
+      <!-- Inner Flower Core -->
+      <circle cx="0" cy="0" r="28" fill="#ffe066"/>
+      <circle cx="0" cy="0" r="16" fill="#ffb703"/>
+    </g>
+    
+    <!-- Gentle Brand Smile / Sparkle -->
+    <circle cx="340" cy="180" r="12" fill="#ffb3c6"/>
+    <circle cx="172" cy="180" r="12" fill="#ffb3c6"/>
+  </g>
+  
+  <!-- Subtle App Label -->
+  <text x="256" y="440" font-family="'Nunito', 'Segoe UI', sans-serif" font-weight="800" font-size="44" fill="#ffffff" text-anchor="middle" letter-spacing="2">CamieWell</text>
+</svg>

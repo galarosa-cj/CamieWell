@@ -28,18 +28,20 @@ import 'bootstrap-icons/font/bootstrap-icons.css';
 import './style.css';
 
 // --- Page renderers: each builds the HTML for one screen ---
-import { renderHome }                  from './pages/home.js';
+import { renderHome, initHome }          from './pages/home.js';
 import { renderFoodDiary, initFoodDiary } from './pages/food.js';
-import { renderWorkouts }              from './pages/workouts.js';
-import { renderProgress }              from './pages/progress.js';
-import { renderSettings }              from './pages/settings.js';
+import { renderWorkouts, initWorkouts } from './pages/workouts.js';
+import { renderHabits, initHabits } from './pages/habits.js';
+import { renderProgress, initProgress, switchToInsightsTab } from './pages/progress.js';
+import { renderSettings, initSettings } from './pages/settings.js';
 
 // --- Interactive behaviours wired after render ---
 import { initWaterTracker }   from './components/water.js';
 import { initMoodSelector }   from './components/mood.js';
 import { initEnergySlider }   from './components/energy.js';
 import { initRings }          from './components/rings.js';
-import { initNavigation }     from './components/navigation.js';
+import { initNavigation, onPageEnter } from './components/navigation.js';
+import { initTheme }          from './utils/theme.js';
 
 /**
  * renderApp()
@@ -52,15 +54,6 @@ function renderApp() {
 
   app.innerHTML = `
     <!-- =====================================================
-         DEMO BANNER
-         A clearly labeled notice that all data is sample data.
-         This stays visible on every screen.
-         ===================================================== -->
-    <div class="demo-banner" role="banner" aria-label="Demo mode notice">
-      ✨ Demo Mode — All data shown is sample data &nbsp;|&nbsp; No real data is saved
-    </div>
-
-    <!-- =====================================================
          TOP HEADER (shared across all screens)
          ===================================================== -->
     <header class="app-header" role="banner">
@@ -72,6 +65,10 @@ function renderApp() {
         </div>
       </div>
       <div class="header-right">
+        <!-- Theme toggle: Light (Baby Pink) / Dark Mode -->
+        <button class="theme-toggle-btn" id="theme-toggle-btn" aria-label="Toggle dark mode" title="Toggle dark mode">
+          <i class="bi bi-moon-stars-fill"></i>
+        </button>
         <div class="header-date" id="header-date-display" aria-live="polite"></div>
         <div class="header-avatar" role="img" aria-label="User profile" title="Profile">🌸</div>
       </div>
@@ -96,6 +93,11 @@ function renderApp() {
     <!-- WORKOUTS -->
     <section id="page-workouts" class="page-section" aria-label="Workouts">
       ${renderWorkouts()}
+    </section>
+
+    <!-- HABITS -->
+    <section id="page-habits" class="page-section" aria-label="Habits">
+      ${renderHabits()}
     </section>
 
     <!-- PROGRESS -->
@@ -124,6 +126,10 @@ function renderApp() {
         <i class="bi bi-lightning-charge-fill"></i>
         <span>Workouts</span>
       </button>
+      <button id="nav-habits"   class="nav-btn"        aria-label="Habits"     data-page="habits">
+        <i class="bi bi-calendar-check-fill"></i>
+        <span>Habits</span>
+      </button>
       <button id="nav-progress" class="nav-btn"        aria-label="Progress"   data-page="progress">
         <i class="bi bi-graph-up-arrow"></i>
         <span>Progress</span>
@@ -138,15 +144,26 @@ function renderApp() {
   // --- Show today's date in the header ---
   updateHeaderDate();
 
+  // --- Initialize theme (Baby Pink / Dark Mode) ---
+  initTheme();
+
   // --- Wire up all interactive components ---
   // (These functions look for their elements in the DOM,
   //  so they must be called AFTER innerHTML is set above.)
   initNavigation();
+  initHome();
   initWaterTracker();
   initMoodSelector();
   initEnergySlider();
   initRings();
   initFoodDiary();
+  initWorkouts();
+  initHabits();
+  initProgress();
+  initSettings();
+
+  // Refresh home highlights when returning to Home screen
+  onPageEnter('home', initHome);
 
   // Wire Home dashboard "Log food →" button to switch to Food tab
   const homeLogBtn = document.getElementById('home-log-food-btn');
@@ -159,6 +176,19 @@ function renderApp() {
       }
     });
   }
+
+  // Wire any insights shortcut navigation
+  document.addEventListener('click', (e) => {
+    const target = e.target.closest('[data-navigate="insights"]');
+    if (target) {
+      e.preventDefault();
+      const navProgress = document.getElementById('nav-progress');
+      if (navProgress) {
+        navProgress.click();
+        switchToInsightsTab('insights');
+      }
+    }
+  });
 }
 
 /**
@@ -178,5 +208,17 @@ function updateHeaderDate() {
   el.textContent = now.toLocaleDateString('en-US', opts);
 }
 
+// --- Register PWA Offline-First Service Worker ---
+function registerServiceWorker() {
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/sw.js').catch((err) => {
+        console.warn('[CamieWell SW] Registration failed:', err);
+      });
+    });
+  }
+}
+
 // --- Kick everything off ---
 renderApp();
+registerServiceWorker();

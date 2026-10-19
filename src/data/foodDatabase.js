@@ -12,8 +12,31 @@
  * when exact precision is required.
  */
 
+import { LOCAL_PHILIPPINE_CATALOG } from './localPhilippineCatalog.js';
+
 export const NUTRITION_DISCLAIMER =
   'Values are estimates based on standard composition databases (e.g. USDA FDC). Actual values vary by brand, recipe, and preparation.';
+
+/**
+ * Re-export for convenience so other modules can import from one place.
+ */
+export { LOCAL_PHILIPPINE_CATALOG };
+
+/**
+ * Normalizes a local Philippine catalog item so it has a `serving` field
+ * (consistent with STARTER_FOODS) and a `source` badge field.
+ * @param {object} item
+ * @returns {object}
+ */
+function normalizeCatalogItem(item) {
+  if (item._normalized) return item;
+  return {
+    ...item,
+    // Local catalog uses `servingSize`; ensure `serving` is always present
+    serving: item.serving || item.servingSize || '1 serving',
+    _normalized: true,
+  };
+}
 
 /**
  * The 12 starter foods required for CamieWell.
@@ -165,23 +188,108 @@ export const STARTER_FOODS = [
   },
 ];
 
+/** Normalized Philippine catalog entries (lazy-initialized). */
+let _normalizedCatalog = null;
+function getNormalizedCatalog() {
+  if (!_normalizedCatalog) {
+    _normalizedCatalog = LOCAL_PHILIPPINE_CATALOG.map(normalizeCatalogItem);
+  }
+  return _normalizedCatalog;
+}
+
 /**
- * Searches a combined food list (starters + custom items) by query string.
- * Matches case-insensitively across food name and category.
+ * Normalizes a saved recipe so it conforms to the searchable food item interface.
+ * @param {Object} recipe
+ * @returns {Object}
+ */
+export function normalizeRecipeToFood(recipe) {
+  if (!recipe) return null;
+  return {
+    id: `recipe_${recipe.id}`,
+    recipeId: recipe.id,
+    name: recipe.name,
+    category: 'Recipes',
+    serving: `1 serving (yield: ${recipe.servings} servings)`,
+    servingSize: `1 of ${recipe.servings} servings`,
+    calories: recipe.nutritionPerServing?.calories || 0,
+    protein: recipe.nutritionPerServing?.protein || 0,
+    carbs: recipe.nutritionPerServing?.carbs || 0,
+    fat: recipe.nutritionPerServing?.fat || 0,
+    icon: recipe.icon || '📖',
+    isRecipe: true,
+    dataStatus: recipe.dataConfidence || 'estimated',
+    sourceNote: recipe.description ? `Recipe: ${recipe.description}` : `User recipe (${recipe.servings} servings yield)`,
+    rawRecipe: recipe,
+  };
+}
+
+/**
+ * Searches a combined food list (starters + custom items + local PH catalog + saved recipes)
+ * by query string. Matches case-insensitively across name, brand, category,
+ * variety, and sourceNote.
  * @param {string} query
  * @param {Array} customFoods
+ * @param {Array} savedRecipes
  * @returns {Array} Matched foods
  */
-export function searchFoods(query = '', customFoods = []) {
-  const allFoods = [...(customFoods || []), ...STARTER_FOODS];
-  const q = (query || '').trim().toLowerCase();
-  if (!q) {
-    return allFoods;
+export function searchFoods(query = '', customFoods = [], savedRecipes = []) {
+  return searchFoodsFiltered(query, customFoods, 'all', savedRecipes);
+}
+
+/**
+ * Filtered search — same as searchFoods but restricts to a catalog category or recipes.
+ * @param {string} query
+ * @param {Array} customFoods
+ * @param {'all'|'local'|'branded'|'ingredients'|'supplements'|'custom'|'starter'|'recipes'} filter
+ * @param {Array} savedRecipes
+ * @returns {Array} Matched foods
+ */
+export function searchFoodsFiltered(query = '', customFoods = [], filter = 'all', savedRecipes = []) {
+  const catalog = getNormalizedCatalog();
+  const custom = (customFoods || []);
+  const normalizedRecipes = (savedRecipes || []).map(normalizeRecipeToFood).filter(Boolean);
+
+  // Build pool based on active filter
+  let pool;
+  switch (filter) {
+    case 'local':
+      pool = catalog.filter((i) => i.category === 'local');
+      break;
+    case 'branded':
+      pool = catalog.filter((i) => i.category === 'branded');
+      break;
+    case 'ingredients':
+      pool = catalog.filter((i) => i.category === 'ingredients');
+      break;
+    case 'supplements':
+      pool = catalog.filter((i) => i.category === 'supplements');
+      break;
+    case 'custom':
+      pool = custom;
+      break;
+    case 'starter':
+      pool = STARTER_FOODS;
+      break;
+    case 'recipes':
+      pool = normalizedRecipes;
+      break;
+    case 'all':
+    default:
+      pool = [...custom, ...normalizedRecipes, ...STARTER_FOODS, ...catalog];
+      break;
   }
-  return allFoods.filter((item) => {
-    const nameMatch = item.name.toLowerCase().includes(q);
-    const catMatch = (item.category || '').toLowerCase().includes(q);
-    const noteMatch = (item.sourceNote || '').toLowerCase().includes(q);
-    return nameMatch || catMatch || noteMatch;
+
+  const q = (query || '').trim().toLowerCase();
+  if (!q) return pool;
+
+  return pool.filter((item) => {
+    return (
+      (item.name || '').toLowerCase().includes(q) ||
+      (item.brand || '').toLowerCase().includes(q) ||
+      (item.variety || '').toLowerCase().includes(q) ||
+      (item.category || '').toLowerCase().includes(q) ||
+      (item.sourceNote || '').toLowerCase().includes(q)
+    );
   });
 }
+

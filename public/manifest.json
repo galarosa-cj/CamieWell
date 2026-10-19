@@ -1,0 +1,25 @@
+{
+  "name": "CamieWell — Daily Wellness Companion",
+  "short_name": "CamieWell",
+  "description": "Cute, offline-first wellness companion for tracking nutrition, hydration, workouts, and daily habits.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#fff0f3",
+  "theme_color": "#ff758f",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/logo.jpg",
+      "sizes": "192x192 512x512",
+      "type": "image/jpeg",
+      "purpose": "any"
+    }
+  ]
+}

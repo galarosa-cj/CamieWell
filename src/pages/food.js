@@ -26,6 +26,8 @@ import {
   STARTER_FOODS,
   NUTRITION_DISCLAIMER,
   searchFoods,
+  searchFoodsFiltered,
+  normalizeRecipeToFood,
 } from '../data/foodDatabase.js';
 
 import {
@@ -36,11 +38,37 @@ import {
   getStorageStatus,
 } from '../services/foodStorage.js';
 
-// Configuration
-const DAILY_CALORIE_GOAL = 2000;
-const DAILY_PROTEIN_GOAL = 80;
-const DAILY_CARBS_GOAL = 220;
-const DAILY_FAT_GOAL = 60;
+import {
+  renderRecipeBuilderModals,
+  initRecipeBuilder,
+  openCreateRecipeModal,
+  openEditRecipeModal,
+  renderSavedRecipesList,
+} from '../components/recipeBuilder.js';
+
+import { getSavedRecipes } from '../services/recipeStorage.js';
+
+import {
+  renderOnlineSearchPanel,
+  initOnlineProductInspector,
+  closeProductInspector,
+  openProductInspector,
+} from '../components/onlineProductInspector.js';
+
+import {
+  renderBarcodeScannerModal,
+  initBarcodeScanner,
+  openBarcodeScanner,
+  closeBarcodeScanner,
+} from '../components/barcodeScanner.js';
+import { getSettings } from '../services/settingsStorage.js';
+import { onPageEnter } from '../components/navigation.js';
+
+// Fallback configuration
+const DEFAULT_CALORIE_GOAL = 2000;
+const DEFAULT_PROTEIN_GOAL = 80;
+const DEFAULT_CARBS_GOAL = 220;
+const DEFAULT_FAT_GOAL = 60;
 
 const MEAL_CONFIG = [
   { key: 'breakfast', title: 'Breakfast', icon: 'bi-cup-hot', emoji: '🍳', defaultEmptyIcon: '🥐' },
@@ -67,7 +95,8 @@ const state = {
   selectedFoodForPortion: null,
   editingItem: null, // { mealKey, index, item }
   searchQuery: '',
-  activeModalTab: 'database', // 'database' | 'custom'
+  activeModalTab: 'database', // 'database' | 'recipes' | 'custom' | 'online'
+  activeFilter: 'all',        // 'all' | 'branded' | 'local' | 'ingredients' | 'supplements' | 'custom'
   lastNotice: null,
 };
 
@@ -103,10 +132,16 @@ export function renderFoodDiary() {
           <!-- NAVIGATION TABS -->
           <div class="cw-modal-tabs" id="food-modal-tabs" role="tablist">
             <button type="button" class="cw-tab-btn active" id="tab-btn-db" data-tab="database" role="tab" aria-selected="true">
-              <i class="bi bi-search"></i> Food Database
+              <i class="bi bi-search"></i> Local
+            </button>
+            <button type="button" class="cw-tab-btn" id="tab-btn-recipes" data-tab="recipes" role="tab" aria-selected="false">
+              <i class="bi bi-book"></i> Recipes
+            </button>
+            <button type="button" class="cw-tab-btn" id="tab-btn-online" data-tab="online" role="tab" aria-selected="false">
+              <i class="bi bi-globe2"></i> Online
             </button>
             <button type="button" class="cw-tab-btn" id="tab-btn-custom" data-tab="custom" role="tab" aria-selected="false">
-              <i class="bi bi-plus-circle"></i> Custom Food
+              <i class="bi bi-plus-circle"></i> Custom
             </button>
           </div>
 
@@ -118,12 +153,23 @@ export function renderFoodDiary() {
                 type="text"
                 id="food-search-input"
                 class="cw-search-input"
-                placeholder="Search rice, eggs, chicken, milk..."
+                placeholder="Search sardines, tuna, pandesal, milo, recipes..."
                 autocomplete="off"
               />
               <button type="button" id="food-search-clear" class="cw-search-clear d-none" aria-label="Clear search">
                 <i class="bi bi-x-circle-fill"></i>
               </button>
+            </div>
+
+            <!-- CATEGORY FILTER PILLS -->
+            <div class="cw-filter-pills" id="food-filter-pills" role="group" aria-label="Filter food catalog">
+              <button type="button" class="cw-filter-pill active" data-filter="all" id="fpill-all">All</button>
+              <button type="button" class="cw-filter-pill" data-filter="recipes" id="fpill-recipes">📖 Recipes</button>
+              <button type="button" class="cw-filter-pill" data-filter="branded" id="fpill-branded">🏪 Branded PH</button>
+              <button type="button" class="cw-filter-pill" data-filter="local" id="fpill-local">🇵🇭 Local</button>
+              <button type="button" class="cw-filter-pill" data-filter="ingredients" id="fpill-ingredients">🫙 Ingredients</button>
+              <button type="button" class="cw-filter-pill" data-filter="supplements" id="fpill-supplements">💊 Supplements</button>
+              <button type="button" class="cw-filter-pill" data-filter="custom" id="fpill-custom">✏️ Custom</button>
             </div>
 
             <div class="cw-disclaimer-card mb-2">
@@ -135,7 +181,16 @@ export function renderFoodDiary() {
             <div id="food-results-list" class="food-results-list" role="list"></div>
           </div>
 
-          <!-- TAB 2: CUSTOM FOOD FORM -->
+          <!-- TAB 2: RECIPES LIST -->
+          <div id="modal-tab-recipes" class="modal-tab-content" role="tabpanel" style="display:none;">
+            <div id="modal-recipes-list-container">
+              <!-- Populated by renderSavedRecipesList -->
+            </div>
+          </div>
+
+          ${renderOnlineSearchPanel()}
+
+          <!-- TAB 3: CUSTOM FOOD FORM -->
           <div id="modal-tab-custom" class="modal-tab-content" role="tabpanel" style="display:none;">
             <p class="text-muted small mb-3">
               Add your own custom food or recipe using values from product nutrition labels.
@@ -189,7 +244,9 @@ export function renderFoodDiary() {
 
             <div class="portion-food-summary">
               <div class="d-flex align-items-center gap-2 mb-1">
-                <span class="fs-4" id="portion-food-emoji">🥑</span>
+                <div id="portion-food-thumb-wrap" class="food-thumb-container flex-shrink-0">
+                  <span class="fs-4" id="portion-food-emoji">🥑</span>
+                </div>
                 <div>
                   <h4 class="mb-0 fs-6 fw-bold text-dark" id="portion-food-name">Selected Food</h4>
                   <span class="text-muted small" id="portion-food-serving">1 serving</span>
@@ -366,6 +423,9 @@ export function renderFoodDiary() {
         </div>
       </div>
     </div>
+
+    ${renderRecipeBuilderModals()}
+    ${renderBarcodeScannerModal()}
   `;
 }
 
@@ -379,6 +439,7 @@ export function initFoodDiary() {
   const foodModal = document.getElementById('cw-food-modal');
   const editModal = document.getElementById('cw-edit-modal');
   const deleteModal = document.getElementById('cw-delete-modal');
+  const barcodeModal = document.getElementById('cw-barcode-modal');
   if (foodModal && foodModal.parentElement !== document.body) {
     document.body.appendChild(foodModal);
   }
@@ -388,9 +449,111 @@ export function initFoodDiary() {
   if (deleteModal && deleteModal.parentElement !== document.body) {
     document.body.appendChild(deleteModal);
   }
+  if (barcodeModal && barcodeModal.parentElement !== document.body) {
+    document.body.appendChild(barcodeModal);
+  }
+
+  // Initialize Recipe Builder component
+  initRecipeBuilder({
+    onRecipeSaved: () => {
+      updateFoodDiaryUI();
+      renderFoodSearchResults();
+      const recContainer = document.getElementById('modal-recipes-list-container');
+      if (recContainer) {
+        renderSavedRecipesList(recContainer, state.activeMealKey);
+      }
+    },
+    onLogRecipeToDiary: (recipe, mealKey) => {
+      state.activeMealKey = mealKey || state.activeMealKey;
+      const normalized = normalizeRecipeToFood(recipe);
+      if (normalized) {
+        selectFoodForPortion(normalized);
+      }
+    },
+  });
+
+  // Initialize Online Product Inspector (Phase 3)
+  initOnlineProductInspector({
+    getActiveMealKey: () => state.activeMealKey,
+
+    /**
+     * Adds an online product directly to the diary.
+     * Nutrition values go through selectFoodForPortion so the user can
+     * confirm quantity before committing — same flow as local foods.
+     */
+    onAddToDiary: (product, targetMealKey) => {
+      state.activeMealKey = targetMealKey || state.activeMealKey;
+      // Provide fallback zeros only for the diary log calculation layer;
+      // null stays null in baseNutrition so we don't invent values.
+      const diaryFood = {
+        id: product.id,
+        name: product.name,
+        icon: '🌐',
+        serving: product.serving,
+        calories: product.calories ?? 0,
+        protein: product.protein ?? 0,
+        carbs: product.carbs ?? 0,
+        fat: product.fat ?? 0,
+        isOnlineResult: true,
+        sourceNote: product.sourceNote,
+        nutritionBasis: product.nutritionBasis,
+      };
+      closeAddFoodModal();
+      selectFoodForPortion(diaryFood);
+      // Re-open so user can confirm quantity
+      const modal = document.getElementById('cw-food-modal');
+      if (modal) {
+        modal.classList.add('active');
+        modal.setAttribute('aria-hidden', 'false');
+        document.body.style.overflow = 'hidden';
+      }
+    },
+
+    /**
+     * Saves an online product to the local custom foods database.
+     * Uses saveCustomFood from foodStorage — never overwrites existing records
+     * (saveCustomFood uses the product ID to deduplicate).
+     */
+    onSaveFood: (product) => {
+      saveCustomFood({
+        id: product.id,
+        name: product.name,
+        serving: product.serving,
+        calories: product.calories ?? 0,
+        protein: product.protein ?? 0,
+        carbs: product.carbs ?? 0,
+        fat: product.fat ?? 0,
+        icon: '🌐',
+        category: 'Online Search',
+        sourceNote: product.sourceNote,
+        dataStatus: product.dataStatus,
+        isOnlineResult: true,
+      });
+      // Refresh the local search results to show the newly saved food
+      renderFoodSearchResults();
+    },
+  });
+
+  // Initialize Barcode Scanner (Phase 4B)
+  initBarcodeScanner({
+    onProductFound: (product) => {
+      // Close barcode scanner, then open the product inspector for confirmation
+      closeBarcodeScanner();
+      // Small delay to allow barcode modal animation to complete
+      setTimeout(() => openProductInspector(product), 200);
+    },
+  });
+
+  // Wire barcode scan button in Online tab
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('#online-barcode-scan-btn')) {
+      openBarcodeScanner();
+    }
+  }, { capture: false });
 
   updateFoodDiaryUI();
   setupGlobalModalEvents();
+  onPageEnter('food', updateFoodDiaryUI);
 }
 
 /**
@@ -404,13 +567,19 @@ function updateFoodDiaryUI() {
   const { log, isPersistent, warning } = getFoodLog(dateKey);
   const storageStatus = getStorageStatus();
 
-  const dailyTotals = calculateDailyTotals(log.meals);
-  const remainingCals = DAILY_CALORIE_GOAL - dailyTotals.calories;
-  const calPercent = Math.min(100, Math.round((dailyTotals.calories / DAILY_CALORIE_GOAL) * 100));
+  const settings = getSettings();
+  const calorieGoal = (settings && Number(settings.calorieGoal) > 0) ? Number(settings.calorieGoal) : DEFAULT_CALORIE_GOAL;
+  const proteinGoal = (settings && Number(settings.proteinGoal) > 0) ? Number(settings.proteinGoal) : DEFAULT_PROTEIN_GOAL;
+  const carbsGoal = (settings && Number(settings.carbsGoal) > 0) ? Number(settings.carbsGoal) : DEFAULT_CARBS_GOAL;
+  const fatGoal = (settings && Number(settings.fatGoal) > 0) ? Number(settings.fatGoal) : DEFAULT_FAT_GOAL;
 
-  const proteinPercent = Math.min(100, Math.round((dailyTotals.protein / DAILY_PROTEIN_GOAL) * 100));
-  const carbsPercent = Math.min(100, Math.round((dailyTotals.carbs / DAILY_CARBS_GOAL) * 100));
-  const fatPercent = Math.min(100, Math.round((dailyTotals.fat / DAILY_FAT_GOAL) * 100));
+  const dailyTotals = calculateDailyTotals(log.meals);
+  const remainingCals = calorieGoal - dailyTotals.calories;
+  const calPercent = Math.min(100, Math.round((dailyTotals.calories / calorieGoal) * 100));
+
+  const proteinPercent = Math.min(100, Math.round((dailyTotals.protein / proteinGoal) * 100));
+  const carbsPercent = Math.min(100, Math.round((dailyTotals.carbs / carbsGoal) * 100));
+  const fatPercent = Math.min(100, Math.round((dailyTotals.fat / fatGoal) * 100));
 
   const displayDateStr = formatDisplayDate(state.currentDate);
   const isToday = dateKey === formatDateKey(new Date());
@@ -437,7 +606,13 @@ function updateFoodDiaryUI() {
           <h2 class="page-title mb-0">Food Diary 🥑</h2>
           <p class="page-subtitle mb-0">Track meals &amp; nutrients</p>
         </div>
-        <div class="d-flex align-items-center gap-1">
+        <div class="d-flex align-items-center gap-2">
+          <button type="button" class="btn btn-xs cw-btn-outline-pink" id="btn-diary-open-recipes" title="Manage recipes">
+            <i class="bi bi-book-half"></i> Recipes
+          </button>
+          <button type="button" class="btn btn-xs cw-btn-outline-pink" id="btn-diary-open-backup" title="Backup & Restore data">
+            <i class="bi bi-cloud-arrow-down"></i> Backup
+          </button>
           <span class="badge ${isPersistent ? 'bg-success-subtle text-success' : 'bg-warning-subtle text-warning'} border">
             ${isPersistent ? '✦ Offline Ready' : '✦ Session Only'}
           </span>
@@ -487,7 +662,7 @@ function updateFoodDiaryUI() {
       <div class="d-flex justify-content-between align-items-baseline mb-1">
         <div>
           <span class="fs-2 fw-bolder text-white">${dailyTotals.calories.toLocaleString()}</span>
-          <span class="text-white-50 small"> / ${DAILY_CALORIE_GOAL.toLocaleString()} kcal</span>
+          <span class="text-white-50 small"> / ${calorieGoal.toLocaleString()} kcal</span>
         </div>
         <div class="small text-white-50 font-monospace">${calPercent}%</div>
       </div>
@@ -504,7 +679,7 @@ function updateFoodDiaryUI() {
           <div class="cw-progress mt-1" style="height:4px; background: rgba(255,255,255,0.25);">
             <div class="cw-progress-fill" style="width:${proteinPercent}%; background: var(--color-protein);"></div>
           </div>
-          <span class="xsmall text-white-50" style="font-size:0.65rem;">Goal: ${DAILY_PROTEIN_GOAL}g</span>
+          <span class="xsmall text-white-50" style="font-size:0.65rem;">Goal: ${proteinGoal}g</span>
         </div>
         <div class="col-4">
           <div class="small text-white-50">Carbs</div>
@@ -512,7 +687,7 @@ function updateFoodDiaryUI() {
           <div class="cw-progress mt-1" style="height:4px; background: rgba(255,255,255,0.25);">
             <div class="cw-progress-fill" style="width:${carbsPercent}%; background: var(--color-water);"></div>
           </div>
-          <span class="xsmall text-white-50" style="font-size:0.65rem;">Goal: ${DAILY_CARBS_GOAL}g</span>
+          <span class="xsmall text-white-50" style="font-size:0.65rem;">Goal: ${carbsGoal}g</span>
         </div>
         <div class="col-4">
           <div class="small text-white-50">Fat</div>
@@ -520,7 +695,7 @@ function updateFoodDiaryUI() {
           <div class="cw-progress mt-1" style="height:4px; background: rgba(255,255,255,0.25);">
             <div class="cw-progress-fill" style="width:${fatPercent}%; background: var(--color-activity);"></div>
           </div>
-          <span class="xsmall text-white-50" style="font-size:0.65rem;">Goal: ${DAILY_FAT_GOAL}g</span>
+          <span class="xsmall text-white-50" style="font-size:0.65rem;">Goal: ${fatGoal}g</span>
         </div>
       </div>
     </div>
@@ -571,18 +746,26 @@ function renderMealCard(config, items) {
                 .map(
                   (item, idx) => `
                 <div class="meal-food-item d-flex align-items-center justify-content-between py-2 border-top" data-index="${idx}" data-meal="${config.key}">
-                  <div class="meal-item-info">
-                    <div class="d-flex align-items-center gap-1">
-                      <span class="fw-semibold text-dark">${escapeHtml(item.name)}</span>
-                      ${item.isCustom ? '<span class="badge bg-pink-100 text-pink xsmall py-0">Custom</span>' : ''}
-                    </div>
-                    <div class="text-muted small">
-                      ${item.quantity} × ${escapeHtml(item.serving)}
-                    </div>
-                    <div class="meal-macro-pills mt-1">
-                      <span class="macro-pill pill-protein">P: ${item.protein}g</span>
-                      <span class="macro-pill pill-carbs">C: ${item.carbs}g</span>
-                      <span class="macro-pill pill-fat">F: ${item.fat}g</span>
+                  <div class="meal-item-info d-flex align-items-center gap-2">
+                    ${
+                      item.imageUrl
+                        ? `<img src="${escapeHtml(item.imageUrl)}" alt="" class="meal-item-thumb" onerror="this.style.display='none'; if(this.nextElementSibling) this.nextElementSibling.style.display='inline-block';" /><span class="meal-item-emoji" style="display:none;">${escapeHtml(item.icon || (item.isRecipe ? '🍲' : '🌸'))}</span>`
+                        : `<span class="meal-item-emoji">${escapeHtml(item.icon || (item.isRecipe ? '🍲' : '🌸'))}</span>`
+                    }
+                    <div>
+                      <div class="d-flex align-items-center gap-1">
+                        <span class="fw-semibold text-dark">${escapeHtml(item.name)}</span>
+                        ${item.isRecipe ? '<span class="badge bg-purple-100 text-purple xsmall py-0">Recipe</span>' : ''}
+                        ${item.isCustom ? '<span class="badge bg-pink-100 text-pink xsmall py-0">Custom</span>' : ''}
+                      </div>
+                      <div class="text-muted small">
+                        ${item.quantity} × ${escapeHtml(item.serving)}
+                      </div>
+                      <div class="meal-macro-pills mt-1">
+                        <span class="macro-pill pill-protein">P: ${item.protein}g</span>
+                        <span class="macro-pill pill-carbs">C: ${item.carbs}g</span>
+                        <span class="macro-pill pill-fat">F: ${item.fat}g</span>
+                      </div>
                     </div>
                   </div>
 
@@ -682,6 +865,29 @@ function attachFoodDiaryEvents() {
       }
     };
   }
+  // Open Recipes Manager
+  const diaryOpenRecipesBtn = document.getElementById('btn-diary-open-recipes');
+  if (diaryOpenRecipesBtn) {
+    diaryOpenRecipesBtn.onclick = () => {
+      openAddFoodModal('breakfast');
+      switchModalTab('recipes');
+    };
+  }
+
+  // Open Backup & Restore in Settings
+  const diaryOpenBackupBtn = document.getElementById('btn-diary-open-backup');
+  if (diaryOpenBackupBtn) {
+    diaryOpenBackupBtn.onclick = () => {
+      const navSettingsBtn = document.getElementById('nav-settings');
+      if (navSettingsBtn) {
+        navSettingsBtn.click();
+        const backupSection = document.getElementById('backup-section');
+        if (backupSection) {
+          backupSection.scrollIntoView({ behavior: 'smooth' });
+        }
+      }
+    };
+  }
 }
 
 /**
@@ -730,10 +936,29 @@ function setupGlobalModalEvents() {
 
   // Tab switching
   const tabBtnDb = document.getElementById('tab-btn-db');
+  const tabBtnRecipes = document.getElementById('tab-btn-recipes');
+  const tabBtnOnline = document.getElementById('tab-btn-online');
   const tabBtnCustom = document.getElementById('tab-btn-custom');
-  if (tabBtnDb && tabBtnCustom) {
-    tabBtnDb.onclick = () => switchModalTab('database');
-    tabBtnCustom.onclick = () => switchModalTab('custom');
+  if (tabBtnDb) tabBtnDb.onclick = () => switchModalTab('database');
+  if (tabBtnRecipes) tabBtnRecipes.onclick = () => switchModalTab('recipes');
+  if (tabBtnOnline) tabBtnOnline.onclick = () => switchModalTab('online');
+  if (tabBtnCustom) tabBtnCustom.onclick = () => switchModalTab('custom');
+
+  // Category filter pills
+  const filterPillsContainer = document.getElementById('food-filter-pills');
+  if (filterPillsContainer) {
+    filterPillsContainer.onclick = (e) => {
+      const pill = e.target.closest('.cw-filter-pill');
+      if (!pill) return;
+      const filter = pill.getAttribute('data-filter');
+      if (!filter) return;
+      state.activeFilter = filter;
+      // Update active class
+      filterPillsContainer.querySelectorAll('.cw-filter-pill').forEach((p) => {
+        p.classList.toggle('active', p === pill);
+      });
+      renderFoodSearchResults();
+    };
   }
 
   // Search input
@@ -846,6 +1071,7 @@ function openAddFoodModal(mealKey) {
   state.activeMealKey = mealKey;
   state.selectedFoodForPortion = null;
   state.searchQuery = '';
+  state.activeFilter = 'all';
 
   const modal = document.getElementById('cw-food-modal');
   const mealConfig = MEAL_CONFIG.find((m) => m.key === mealKey) || MEAL_CONFIG[0];
@@ -860,6 +1086,11 @@ function openAddFoodModal(mealKey) {
 
   const searchInput = document.getElementById('food-search-input');
   if (searchInput) searchInput.value = '';
+
+  // Reset filter pills to 'all'
+  document.querySelectorAll('.cw-filter-pill').forEach((p) => {
+    p.classList.toggle('active', p.getAttribute('data-filter') === 'all');
+  });
 
   switchModalTab('database');
   showFoodListPanel();
@@ -885,35 +1116,62 @@ function closeAddFoodModal() {
 }
 
 /**
- * Switches tabs between Starter Database and Custom Food.
+ * Switches tabs between Starter Database, Saved Recipes, and Custom Food.
  */
 function switchModalTab(tabKey) {
   state.activeModalTab = tabKey;
   const tabBtnDb = document.getElementById('tab-btn-db');
+  const tabBtnRecipes = document.getElementById('tab-btn-recipes');
+  const tabBtnOnline = document.getElementById('tab-btn-online');
   const tabBtnCustom = document.getElementById('tab-btn-custom');
   const tabPaneDb = document.getElementById('modal-tab-database');
+  const tabPaneRecipes = document.getElementById('modal-tab-recipes');
+  const tabPaneOnline = document.getElementById('modal-tab-online');
   const tabPaneCustom = document.getElementById('modal-tab-custom');
   const portionPanel = document.getElementById('food-portion-panel');
 
   if (portionPanel) portionPanel.style.display = 'none';
 
+  [
+    { btn: tabBtnDb, pane: tabPaneDb, key: 'database' },
+    { btn: tabBtnRecipes, pane: tabPaneRecipes, key: 'recipes' },
+    { btn: tabBtnOnline, pane: tabPaneOnline, key: 'online' },
+    { btn: tabBtnCustom, pane: tabPaneCustom, key: 'custom' },
+  ].forEach(({ btn, pane, key }) => {
+    const isActive = key === tabKey;
+    btn?.classList.toggle('active', isActive);
+    btn?.setAttribute('aria-selected', isActive ? 'true' : 'false');
+    if (pane) pane.style.display = isActive ? 'block' : 'none';
+  });
+
   if (tabKey === 'database') {
-    tabBtnDb?.classList.add('active');
-    tabBtnDb?.setAttribute('aria-selected', 'true');
-    tabBtnCustom?.classList.remove('active');
-    tabBtnCustom?.setAttribute('aria-selected', 'false');
-
-    if (tabPaneDb) tabPaneDb.style.display = 'block';
-    if (tabPaneCustom) tabPaneCustom.style.display = 'none';
     renderFoodSearchResults();
-  } else {
-    tabBtnCustom?.classList.add('active');
-    tabBtnCustom?.setAttribute('aria-selected', 'true');
-    tabBtnDb?.classList.remove('active');
-    tabBtnDb?.setAttribute('aria-selected', 'false');
+  } else if (tabKey === 'recipes') {
+    const container = document.getElementById('modal-recipes-list-container');
+    if (container) {
+      renderSavedRecipesList(container, state.activeMealKey);
+    }
+  }
+  // 'online' tab: no auto-search; user explicitly clicks Search Online
+}
 
-    if (tabPaneCustom) tabPaneCustom.style.display = 'block';
-    if (tabPaneDb) tabPaneDb.style.display = 'none';
+/**
+ * Returns a human-readable badge for a catalog data-status.
+ * @param {string|undefined} dataStatus
+ * @returns {string} HTML badge string
+ */
+function renderDataStatusBadge(dataStatus) {
+  if (!dataStatus) return '';
+  switch (dataStatus) {
+    case 'verified_label':
+    case 'calculated_from_verified':
+      return '<span class="cw-badge-verified">✓ Verified</span>';
+    case 'estimated':
+      return '<span class="cw-badge-estimated">~ Estimated</span>';
+    case 'needs_verification':
+      return '<span class="cw-badge-unverified">? Needs Check</span>';
+    default:
+      return '';
   }
 }
 
@@ -925,13 +1183,17 @@ function renderFoodSearchResults() {
   if (!listEl) return;
 
   const { foods: customFoods } = getCustomFoods();
-  const results = searchFoods(state.searchQuery, customFoods);
+  const { recipes: savedRecipes } = getSavedRecipes();
+  const results = searchFoodsFiltered(state.searchQuery, customFoods, state.activeFilter, savedRecipes);
 
   if (results.length === 0) {
+    const queryHint = state.searchQuery
+      ? `for \"${escapeHtml(state.searchQuery)}\"`
+      : 'in this category';
     listEl.innerHTML = `
       <div class="text-center py-4 text-muted">
         <i class="bi bi-search fs-2 mb-2"></i>
-        <p class="small mb-2">No matching foods found for "${escapeHtml(state.searchQuery)}".</p>
+        <p class="small mb-2">No matching foods found ${queryHint}.</p>
         <button type="button" class="btn btn-xs cw-btn-outline-pink" id="btn-no-match-custom">
           + Create Custom Food
         </button>
@@ -946,21 +1208,40 @@ function renderFoodSearchResults() {
 
   listEl.innerHTML = results
     .map((item) => {
+      const brandLine = item.brand
+        ? `<span class="cw-food-brand">${escapeHtml(item.brand)}${
+            item.variety ? ` · ${escapeHtml(item.variety)}` : ''
+          }</span>`
+        : '';
+      const statusBadge = renderDataStatusBadge(item.dataStatus);
+      const pkgLine = item.packageSize
+        ? `<span class="xsmall text-muted">${escapeHtml(item.packageSize)}</span>`
+        : '';
       return `
       <div class="food-search-card" data-food-id="${item.id}" role="button" tabindex="0">
         <div class="d-flex align-items-center gap-2">
-          <span class="fs-4">${escapeHtml(item.icon || '🌸')}</span>
-          <div class="flex-grow-1">
-            <div class="d-flex align-items-center gap-1">
+          <div class="food-thumb-container flex-shrink-0">
+            ${
+              item.imageUrl || item.imageThumbUrl
+                ? `<img src="${escapeHtml(item.imageUrl || item.imageThumbUrl)}" alt="${escapeHtml(item.name)}" class="food-card-thumb" loading="lazy" onerror="this.style.display='none'; if(this.nextElementSibling) this.nextElementSibling.style.display='inline-flex';" /><span class="fs-4 food-thumb-emoji" style="display:none;">${escapeHtml(item.icon || (item.isRecipe ? '🍲' : '🌸'))}</span>`
+                : `<span class="fs-4 food-thumb-emoji">${escapeHtml(item.icon || (item.isRecipe ? '🍲' : '🌸'))}</span>`
+            }
+          </div>
+          <div class="flex-grow-1 min-w-0">
+            <div class="d-flex align-items-center gap-1 flex-wrap">
               <span class="fw-bold text-dark fs-6">${escapeHtml(item.name)}</span>
+              ${item.isRecipe ? '<span class="badge bg-purple-100 text-purple xsmall py-0">Recipe</span>' : ''}
               ${item.isCustom ? '<span class="badge bg-pink-100 text-pink xsmall py-0">Custom</span>' : ''}
+              ${statusBadge}
             </div>
-            <div class="text-muted small">${escapeHtml(item.serving)}</div>
+            ${brandLine}
+            <div class="text-muted small">${escapeHtml(item.serving || item.servingSize || '')}</div>
+            ${pkgLine}
             <div class="xsmall text-muted" style="font-size:0.75rem;">
               P: ${item.protein}g · C: ${item.carbs}g · F: ${item.fat}g
             </div>
           </div>
-          <div class="text-end">
+          <div class="text-end flex-shrink-0">
             <span class="fw-bold text-pink">${item.calories} <small>kcal</small></span>
             <div class="text-muted xsmall"><i class="bi bi-chevron-right"></i></div>
           </div>
@@ -970,14 +1251,20 @@ function renderFoodSearchResults() {
     })
     .join('');
 
-  // Attach click listener for selecting a food item
+  // Attach click listeners using the already-rendered results array as the source of truth
   listEl.querySelectorAll('.food-search-card').forEach((card) => {
     card.onclick = () => {
       const foodId = card.getAttribute('data-food-id');
-      const allFoods = [...customFoods, ...STARTER_FOODS];
-      const selected = allFoods.find((f) => f.id === foodId);
+      // Find in the results we just rendered (avoids re-searching)
+      const selected = results.find((f) => f.id === foodId);
       if (selected) {
         selectFoodForPortion(selected);
+      }
+    };
+    card.onkeydown = (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        card.click();
       }
     };
   });
@@ -990,17 +1277,30 @@ function selectFoodForPortion(food) {
   state.selectedFoodForPortion = food;
 
   const tabPaneDb = document.getElementById('modal-tab-database');
+  const tabPaneRecipes = document.getElementById('modal-tab-recipes');
   const tabPaneCustom = document.getElementById('modal-tab-custom');
   const tabsNav = document.getElementById('food-modal-tabs');
   const portionPanel = document.getElementById('food-portion-panel');
 
   if (tabPaneDb) tabPaneDb.style.display = 'none';
+  if (tabPaneRecipes) tabPaneRecipes.style.display = 'none';
   if (tabPaneCustom) tabPaneCustom.style.display = 'none';
   if (tabsNav) tabsNav.style.display = 'none';
   if (portionPanel) portionPanel.style.display = 'block';
 
   document.getElementById('portion-food-name').textContent = food.name;
-  document.getElementById('portion-food-emoji').textContent = food.icon || '🥑';
+  const thumbWrap = document.getElementById('portion-food-thumb-wrap');
+  const imgUrl = food.imageUrl || food.imageThumbUrl;
+  if (thumbWrap) {
+    if (imgUrl) {
+      thumbWrap.innerHTML = `<img src="${escapeHtml(imgUrl)}" alt="${escapeHtml(food.name)}" class="food-card-thumb" onerror="this.parentElement.innerHTML='<span class=\\'fs-4\\'>${escapeHtml(food.icon || '🌸')}</span>';" />`;
+    } else {
+      thumbWrap.innerHTML = `<span class="fs-4" id="portion-food-emoji">${escapeHtml(food.icon || (food.isRecipe ? '🍲' : '🥑'))}</span>`;
+    }
+  } else {
+    const emojiEl = document.getElementById('portion-food-emoji');
+    if (emojiEl) emojiEl.textContent = food.icon || (food.isRecipe ? '🍲' : '🥑');
+  }
   document.getElementById('portion-food-serving').textContent = `Serving: ${food.serving}`;
   document.getElementById('portion-food-source').textContent = food.sourceNote ? `Source: ${food.sourceNote}` : '';
 
@@ -1081,8 +1381,11 @@ function handleConfirmAddFood() {
   const entry = {
     id: `log_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
     foodId: food.id,
+    recipeId: food.recipeId || null,
+    isRecipe: !!food.isRecipe,
     name: food.name,
-    icon: food.icon || '🌸',
+    imageUrl: food.imageUrl || food.imageThumbUrl || null,
+    icon: food.icon || (food.isRecipe ? '🍲' : '🌸'),
     serving: food.serving,
     quantity: check.value,
     calories: scaled.calories,

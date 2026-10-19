@@ -246,3 +246,137 @@ export function saveCustomFood(customFood) {
     };
   }
 }
+
+/**
+ * Returns all food logs currently stored (both in localStorage and in memory cache).
+ * @returns {Record<string, Object>} Object mapping dateKey to log object
+ */
+export function getAllFoodLogs() {
+  const result = {};
+
+  // First sync any date keys from memory
+  for (const [dateKey, log] of memoryLogsCache.entries()) {
+    if (dateKey && log) {
+      result[dateKey] = JSON.parse(JSON.stringify(log));
+    }
+  }
+
+  // Then check localStorage if available
+  const isAvailable = checkStorageAvailability();
+  if (isAvailable && typeof window !== 'undefined' && window.localStorage) {
+    try {
+      const totalKeys = window.localStorage.length;
+      for (let i = 0; i < totalKeys; i++) {
+        const key = window.localStorage.key(i);
+        if (key && key.startsWith(STORAGE_PREFIX)) {
+          const dateKey = key.slice(STORAGE_PREFIX.length);
+          try {
+            const raw = window.localStorage.getItem(key);
+            if (raw) {
+              const parsed = JSON.parse(raw);
+              if (parsed && parsed.meals) {
+                result[dateKey] = parsed;
+              }
+            }
+          } catch {
+            // Skip unparseable items
+          }
+        }
+      }
+    } catch (err) {
+      storageWarning = `Failed to read all logs: ${err.message}`;
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Replaces all food logs with a new map of date logs.
+ * Cleans out any previous date keys that are not present in the new map.
+ * @param {Record<string, Object>} newLogsMap
+ * @returns {{ success: boolean, isPersistent: boolean, error: string|null }}
+ */
+export function replaceAllFoodLogs(newLogsMap) {
+  const isAvailable = checkStorageAvailability();
+
+  // Clear existing date keys from localStorage
+  if (isAvailable && typeof window !== 'undefined' && window.localStorage) {
+    try {
+      const keysToRemove = [];
+      for (let i = 0; i < window.localStorage.length; i++) {
+        const k = window.localStorage.key(i);
+        if (k && k.startsWith(STORAGE_PREFIX)) {
+          keysToRemove.push(k);
+        }
+      }
+      for (const k of keysToRemove) {
+        window.localStorage.removeItem(k);
+      }
+    } catch (err) {
+      return { success: false, isPersistent: false, error: err.message };
+    }
+  }
+
+  // Clear memory cache
+  memoryLogsCache.clear();
+
+  // Insert new logs
+  if (newLogsMap && typeof newLogsMap === 'object') {
+    for (const [dateKey, log] of Object.entries(newLogsMap)) {
+      if (dateKey && log && log.meals) {
+        saveFoodLog(dateKey, log);
+      }
+    }
+  }
+
+  return { success: true, isPersistent: isAvailable && !storageWarning, error: null };
+}
+
+/**
+ * Replaces all custom foods in storage.
+ * @param {Array<Object>} newFoods
+ * @returns {{ success: boolean, isPersistent: boolean, error: string|null }}
+ */
+export function replaceAllCustomFoods(newFoods) {
+  const sanitized = Array.isArray(newFoods) ? [...newFoods] : [];
+  memoryCustomFoods = sanitized;
+
+  const isAvailable = checkStorageAvailability();
+  if (!isAvailable) {
+    return { success: true, isPersistent: false, error: null };
+  }
+
+  try {
+    window.localStorage.setItem(CUSTOM_FOODS_KEY, JSON.stringify(sanitized));
+    storageWarning = null;
+    return { success: true, isPersistent: true, error: null };
+  } catch (err) {
+    storageWarning = err.message;
+    return { success: false, isPersistent: false, error: err.message };
+  }
+}
+
+/**
+ * Clears all food logs from storage and memory.
+ */
+export function clearAllFoodLogs() {
+  const isAvailable = checkStorageAvailability();
+  if (isAvailable && typeof window !== 'undefined' && window.localStorage) {
+    try {
+      const keysToRemove = [];
+      for (let i = 0; i < window.localStorage.length; i++) {
+        const k = window.localStorage.key(i);
+        if (k && k.startsWith(STORAGE_PREFIX)) {
+          keysToRemove.push(k);
+        }
+      }
+      for (const k of keysToRemove) {
+        window.localStorage.removeItem(k);
+      }
+    } catch {
+      // Ignored
+    }
+  }
+  memoryLogsCache.clear();
+}
