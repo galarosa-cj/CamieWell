@@ -85,8 +85,8 @@ export function renderExerciseAnimation(exercise, {
   const mistakes = exercise.commonMistakes || [];
   const breathing = exercise.movementAndBreathing || exercise.breathing || '';
 
-  // Determine active view: if offline or no video, show guide
-  const defaultMode = (!isOnline && !hasVideo) ? 'offline' : (preferredMode || 'video');
+  // Determine active view: auto-switch to offline guide when no internet
+  const defaultMode = !isOnline ? 'offline' : (preferredMode || 'video');
 
   return `
     <div class="exercise-anim-container"
@@ -141,6 +141,15 @@ export function renderExerciseAnimation(exercise, {
                   <text x="23" y="15.5" fill="white" font-family="Arial,sans-serif" font-size="9" font-weight="600">Watch on YouTube</text>
                 </svg>
               </a>
+
+              <!-- Offline overlay — shown when device has no internet -->
+              <div class="video-offline-overlay" aria-live="polite">
+                <div class="video-offline-inner">
+                  <div class="video-offline-icon">📵</div>
+                  <p class="video-offline-title">No internet connection</p>
+                  <p class="video-offline-sub">Switch to the <strong>Offline Guide</strong> tab to follow along without Wi‑Fi.</p>
+                </div>
+              </div>
             </div>
           ` : `
             <div class="exercise-no-video-placeholder">
@@ -342,6 +351,53 @@ export function bindAnimationControls(wrapper) {
       }
     });
   });
+
+  // ── Live online / offline switching ──────────────────────────────────────
+  const offlineOverlay = container.querySelector('.video-offline-overlay');
+
+  function switchToOffline() {
+    // Show overlay over the iframe
+    if (offlineOverlay) offlineOverlay.classList.add('is-visible');
+    // Auto-activate the Offline Guide tab
+    tabButtons.forEach((b) => {
+      const isOffline = b.getAttribute('data-mode') === 'offline';
+      b.classList.toggle('active', isOffline);
+      b.setAttribute('aria-selected', isOffline ? 'true' : 'false');
+    });
+    if (videoPanel) { videoPanel.classList.remove('is-visible'); videoPanel.classList.add('is-hidden'); }
+    if (offlinePanel) { offlinePanel.classList.remove('is-hidden'); offlinePanel.classList.add('is-visible'); }
+    container.setAttribute('data-active-mode', 'offline');
+  }
+
+  function switchToOnline() {
+    // Hide overlay
+    if (offlineOverlay) offlineOverlay.classList.remove('is-visible');
+    // Auto-activate the Video tab
+    tabButtons.forEach((b) => {
+      const isVideo = b.getAttribute('data-mode') === 'video';
+      b.classList.toggle('active', isVideo);
+      b.setAttribute('aria-selected', isVideo ? 'true' : 'false');
+    });
+    if (videoPanel) { videoPanel.classList.remove('is-hidden'); videoPanel.classList.add('is-visible'); }
+    if (offlinePanel) { offlinePanel.classList.remove('is-visible'); offlinePanel.classList.add('is-hidden'); }
+    container.setAttribute('data-active-mode', 'video');
+  }
+
+  // Apply correct initial state
+  if (!navigator.onLine) switchToOffline();
+
+  window.addEventListener('offline', switchToOffline);
+  window.addEventListener('online', switchToOnline);
+
+  // Clean up listeners when the wrapper is removed from the DOM
+  const observer = new MutationObserver(() => {
+    if (!document.contains(wrapper)) {
+      window.removeEventListener('offline', switchToOffline);
+      window.removeEventListener('online', switchToOnline);
+      observer.disconnect();
+    }
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
 }
 
 /**
